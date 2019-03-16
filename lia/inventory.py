@@ -1,6 +1,6 @@
 # Copyright 2017, Development Gateway, Inc.
 # This file is part of lia, see COPYING.
-
+import re
 import logging, json
 
 from ldap3 import ObjectDef, Reader
@@ -49,6 +49,29 @@ def entry_name(entry, name_attr):
             name = sorted(values)[0]
 
     return name
+
+
+
+VARS_RE = re.compile(
+    r'===START JSON===(?P<json>.*)===STOP JSON===(?ms)',
+)
+
+def find_vars_in_attr(input_str):
+    '''
+    Find json in LDAP attribute.
+    '''
+    json_match = VARS_RE.search(input_str)
+    if json_match:
+        return json.loads(json_match.group('json'))
+
+    try:
+        json.loads(input_str)
+    except ValueError:
+        pass
+
+    return {}
+
+
 
 class NotFoundError(Exception):
     def __init__(self, items):
@@ -112,7 +135,7 @@ class Host():
         # parse vars values
         self.vars = {}
         for json_vars in entry[__class__.__attr_vars].values:
-            self.vars.update( json.loads(json_vars) )
+            self.vars.update( find_vars_in_attr(json_vars) )
 
     def get_data(self):
         return self.vars
@@ -129,7 +152,7 @@ class Group():
         self._vars = {}
         self.dn = None
         for json_vars in var_array:
-            self._vars.update( json.loads(json_vars) )
+            self._vars.update( find_vars_in_attr(json_vars) )
 
     def __str__(self):
         return "Group %s" % self.name
